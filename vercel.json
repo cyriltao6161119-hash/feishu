@@ -1,0 +1,20 @@
+{
+  "name": "feishu-receiver",
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/receiver.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/feishu",
+      "dest": "/api/receiver.js"
+    },
+    {
+      "src": "/health",
+      "dest": "/api/receiver.js"
+    }
+  ]
+}

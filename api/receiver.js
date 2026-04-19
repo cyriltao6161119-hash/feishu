@@ -46,15 +46,22 @@ module.exports = async (req, res) => {
         return;
     }
 
-    if (req.method === 'GET' && req.url === '/health') {
-        res.status(200).json({ status: 'ok' });
+    // 飞书 URL 验证（GET 请求带 challenge 参数）
+    if (req.query.challenge) {
+        res.status(200).json({ challenge: req.query.challenge });
+        return;
+    }
+
+    if (req.method === 'GET') {
+        res.status(200).json({ status: 'ok', url: req.url });
         return;
     }
 
     if (req.method === 'POST') {
         const body = req.body || {};
+        console.log('POST body:', JSON.stringify(body));
 
-        // 飞书 URL 验证
+        // 飞书 URL 验证（POST body 方式）
         if (body.challenge) {
             res.status(200).json({ challenge: body.challenge });
             return;

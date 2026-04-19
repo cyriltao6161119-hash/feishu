@@ -1,11 +1,10 @@
 // Vercel serverless function - api/receiver.js
-const crypto = require('crypto');
-
 const APP_ID = 'cli_a92b04eba7389bc4';
 const APP_SECRET = 'CtmQkK5em1bkGqudqwreMcl8qnSVUkmA';
 
 let tokenCache = null;
 let tokenExpiry = 0;
+let userChatId = null; // 存储用户的 chat_id
 
 async function getToken() {
     if (tokenCache && Date.now() < tokenExpiry) return tokenCache;
@@ -20,9 +19,28 @@ async function getToken() {
     return tokenCache;
 }
 
+async function sendReply(token, receiveId, content) {
+    await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+            msg_type: 'text',
+            content: JSON.stringify({ text: content }),
+            receive_id: receiveId
+        })
+    });
+}
+
 async function handleMessage(payload) {
-    const { event, message } = payload;
+    const { event, message, header } = payload;
     if (!message) return;
+
+    // 获取 chat_id
+    const chatId = message.chat_id || event?.chat?.chat_id;
+    if (chatId) userChatId = chatId;
 
     let userText = '';
     try {
@@ -32,13 +50,18 @@ async function handleMessage(payload) {
         userText = message.content || '';
     }
 
-    console.log('收到消息:', userText);
+    console.log('收到消息:', userText, 'chat_id:', chatId);
+
+    // 回复用户
+    const token = await getToken();
+    if (chatId && userText) {
+        await sendReply(token, chatId, `三德子收到：「${userText}」\n主人，我会记住的！`);
+    }
 }
 
 module.exports = async (req, res) => {
-    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
@@ -46,29 +69,24 @@ module.exports = async (req, res) => {
         return;
     }
 
-    // 飞书 URL 验证（GET 请求带 challenge 参数）
     if (req.query.challenge) {
         res.status(200).json({ challenge: req.query.challenge });
         return;
     }
 
     if (req.method === 'GET') {
-        res.status(200).json({ status: 'ok', url: req.url });
+        res.status(200).json({ status: 'ok', hasChatId: !!userChatId });
         return;
     }
 
     if (req.method === 'POST') {
         const body = req.body || {};
-        console.log('POST body:', JSON.stringify(body));
-
-        // 飞书 URL 验证（POST body 方式）
         if (body.challenge) {
             res.status(200).json({ challenge: body.challenge });
             return;
         }
 
         await handleMessage(body);
-
         res.status(200).json({ code: 0, msg: 'ok' });
         return;
     }
